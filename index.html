@@ -1545,15 +1545,34 @@ var TOTAL = 6;
 ────────────────────────────────────────────── */
 function goTo(n) {
   if (n > maxUnlocked) return;
+
   document.getElementById('step-' + currentStep).classList.remove('active');
   currentStep = n;
   document.getElementById('step-' + n).classList.add('active');
+
+  window.dataLayer = window.dataLayer || [];
+
+  const events = [
+    "welcome_page_view",
+    "company_verification_started",
+    "document_upload_started",
+    "agreement_viewed",
+    "payment_started",
+    "approval_page_view"
+  ];
+
+  if (events[n]) {
+    dataLayer.push({
+      event: events[n]
+    });
+  }
+
   updateUI();
-  window.scrollTo({top: 0, behavior: 'smooth'});
+  window.scrollTo({ top: 0, behavior: "smooth" });
+
   if (n === 5) populateReview();
   if (n === 3) setTimestamp();
 }
-
 function mobileNav(n) {
   if (n > maxUnlocked) return;
   goTo(n);
@@ -1936,10 +1955,16 @@ document.addEventListener('DOMContentLoaded', function() {
    BEGIN ONBOARDING - unlocks step 1
 ────────────────────────────────────────────── */
 function beginOnboarding() {
+
+  window.dataLayer = window.dataLayer || [];
+
+  dataLayer.push({
+    event: "begin_onboarding"
+  });
+
   if (maxUnlocked < 1) maxUnlocked = 1;
   goTo(1);
 }
-
 /* ──────────────────────────────────────────────
    INIT
 ────────────────────────────────────────────── */
