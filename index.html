@@ -1760,11 +1760,6 @@ function mobileNav(n) {
    COMPLETE STEP
 ────────────────────────────────────────────── */
 function completeStep(step) {
-  if (step === 1) {
-    gtag('event', 'company_verification_completed', {
-        step_name: 'Company Verification'
-    });
-}
   // Basic validation per step
   if (step === 1) {
     var ok = true;
@@ -1772,11 +1767,17 @@ function completeStep(step) {
     if (!v('f-spoc'))    { showErr('err-spoc', true);    ok = false; } else showErr('err-spoc', false);
     var em = v('f-email');
     if (!em || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)) { showErr('err-email', true); ok = false; } else showErr('err-email', false);
-    if (!ok) return shake(document.querySelector('#step-1 .btn-primary'));
+   if (!ok) {
+    track('company_verification_validation_failed');
+    return shake(document.querySelector('#step-1 .btn-primary'));
+}
   }
   if (step === 3) {
     if (!document.getElementById('chk-terms').checked || !document.getElementById('chk-privacy').checked) {
-      return shake(document.querySelector('#step-3 .btn-primary'));
+
+    track('agreement_validation_failed');
+
+    return shake(document.querySelector('#step-3 .btn-primary'));
     }
     if (!v('sig-input')) return shake(document.getElementById('sig-input'));
   }
@@ -1802,7 +1803,11 @@ function completeStep(step) {
       items:          onboardingItems()
     });
   }
-
+if (step === 1) {
+  track('company_verification_completed', {
+    form_type: activeFormType
+  });
+}
   var next = step < 5 ? step + 1 : 6;
   if (next > maxUnlocked) maxUnlocked = next;
 
