@@ -1,6 +1,58 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+  <!-- Consent Mode v2 defaults — MUST load before GTM/gtag.
+       Region-specific model: consent-law regions (EEA + UK + Switzerland)
+       start 'denied' and require opt-in via the banner; everywhere else is
+       'granted' by default. Google applies the correct default from the
+       visitor's IP-derived region, independent of the banner.
+       Gated set includes India (DPDP Act) since Ritzy is based in Gurgaon. -->
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){ dataLayer.push(arguments); }
+
+  // EU-27 + Iceland/Liechtenstein/Norway (EEA) + UK + Switzerland + India (DPDP Act).
+  var RITZY_GATED_REGIONS = [
+    'AT','BE','BG','HR','CY','CZ','DK','EE','FI','FR','DE','GR','HU','IE','IT',
+    'LV','LT','LU','MT','NL','PL','PT','RO','SK','SI','ES','SE',
+    'IS','LI','NO','GB','CH','IN'
+  ];
+
+  // 1) Stricter default for gated regions — denied until the user opts in.
+  gtag('consent', 'default', {
+    'ad_storage':         'denied',
+    'ad_user_data':       'denied',
+    'ad_personalization': 'denied',
+    'analytics_storage':  'denied',
+    'functionality_storage': 'granted',
+    'security_storage':      'granted',
+    'wait_for_update':    500,
+    'region': RITZY_GATED_REGIONS
+  });
+
+  // 2) Default for everywhere else — granted, no banner friction.
+  gtag('consent', 'default', {
+    'ad_storage':         'granted',
+    'ad_user_data':       'granted',
+    'ad_personalization': 'granted',
+    'analytics_storage':  'granted',
+    'functionality_storage': 'granted',
+    'security_storage':      'granted'
+  });
+
+  // Re-apply a stored consent decision before GTM initialises (no flash of tracking).
+  try {
+    var _consent = localStorage.getItem('ritzy_consent');
+    if (_consent === 'granted' || _consent === 'denied') {
+      gtag('consent', 'update', {
+        'ad_storage':         _consent,
+        'ad_user_data':       _consent,
+        'ad_personalization': _consent,
+        'analytics_storage':  _consent
+      });
+    }
+  } catch (e) {}
+</script>
   <!-- Google Tag Manager -->
 <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
 new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
@@ -707,6 +759,27 @@ input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer}
   #btn-org,#btn-ind{font-size:0.82rem!important;padding:8px 12px!important;}
 }
 
+/* ── Consent banner ── */
+.consent-banner{
+  position:fixed;left:16px;right:16px;bottom:16px;z-index:9999;
+  max-width:760px;margin:0 auto;
+  display:flex;flex-wrap:wrap;align-items:center;gap:16px;
+  padding:18px 22px;border-radius:14px;
+  background:#fff;border:1.5px solid var(--border);
+  box-shadow:0 12px 40px rgba(0,0,0,.18);
+  font-family:var(--font-body);
+}
+.consent-text{flex:1 1 320px;font-size:13px;line-height:1.55;color:var(--ink2)}
+.consent-actions{display:flex;gap:10px;flex:0 0 auto}
+.consent-btn{
+  font-family:var(--font-head);font-weight:700;font-size:13px;
+  padding:10px 18px;border-radius:9px;cursor:pointer;border:1.5px solid var(--g4);
+  transition:transform .12s var(--ease2),background .12s,opacity .12s;
+}
+.consent-btn:hover{transform:translateY(-1px)}
+.consent-accept{background:#4caf2a;color:#fff}
+.consent-decline{background:#fff;color:#4caf2a}
+@media(max-width:520px){.consent-actions{flex:1 1 100%}.consent-btn{flex:1}}
 </style>
 </head>
 <body>
@@ -715,7 +788,20 @@ input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer}
 <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-TJJ3P43G"
 height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 <!-- End Google Tag Manager (noscript) -->
-  
+
+<!-- Consent banner -->
+<div id="consent-banner" class="consent-banner" role="dialog" aria-live="polite"
+     aria-label="Cookie consent" style="display:none">
+  <div class="consent-text">
+    We use cookies and analytics to improve your onboarding experience and measure how
+    our portal performs. You can accept all cookies or continue with only essential ones.
+  </div>
+  <div class="consent-actions">
+    <button class="consent-btn consent-decline" type="button" onclick="setConsent(false)">Essential only</button>
+    <button class="consent-btn consent-accept" type="button" onclick="setConsent(true)">Accept all</button>
+  </div>
+</div>
+
 <!-- NAV -->
 <nav class="nav" role="banner">
   <a href="#" class="nav-brand" aria-label="Ritzy Mobility Home">
@@ -1541,6 +1627,88 @@ var maxUnlocked = 0;
 var TOTAL = 6;
 
 /* ──────────────────────────────────────────────
+   ANALYTICS LAYER  (GTM dataLayer → GA4)
+   NOTE: never push PII (email/phone/name/GST/CIN
+   /address) into the dataLayer — only push the
+   non-identifying attributes below.
+────────────────────────────────────────────── */
+var ORDER_VALUE    = 45000;     // ₹45,000.00 total due (see invoice)
+var ORDER_CURRENCY = 'INR';
+
+function track(eventName, params) {
+  window.dataLayer = window.dataLayer || [];
+  var payload = { event: eventName };
+  if (params) {
+    for (var k in params) {
+      if (params.hasOwnProperty(k) && params[k] !== undefined && params[k] !== null && params[k] !== '') {
+        payload[k] = params[k];
+      }
+    }
+  }
+  dataLayer.push(payload);
+}
+
+// GA4 ecommerce events expect a cleared `ecommerce` object before each push.
+function trackEcommerce(eventName, ecommerce) {
+  window.dataLayer = window.dataLayer || [];
+  dataLayer.push({ ecommerce: null });
+  dataLayer.push({ event: eventName, ecommerce: ecommerce });
+}
+
+function onboardingItems() {
+  return [{
+    item_id:       'ev_fleet_onboarding',
+    item_name:     'EV Fleet Onboarding',
+    item_category: 'b2b_partnership',
+    price:         ORDER_VALUE,
+    quantity:      1
+  }];
+}
+
+/* ──────────────────────────────────────────────
+   CONSENT MODE v2  (banner → gtag consent update)
+   gtag() is defined in <head> before GTM loads.
+────────────────────────────────────────────── */
+function setConsent(granted) {
+  var state = granted ? 'granted' : 'denied';
+  gtag('consent', 'update', {
+    'ad_storage':         state,
+    'ad_user_data':       state,
+    'ad_personalization': state,
+    'analytics_storage':  state
+  });
+  try { localStorage.setItem('ritzy_consent', granted ? 'granted' : 'denied'); } catch (e) {}
+
+  // Record the choice itself (this event is exempt — it carries no personal data).
+  track('consent_update', { consent_status: granted ? 'granted' : 'denied' });
+
+  var banner = document.getElementById('consent-banner');
+  if (banner) banner.style.display = 'none';
+}
+
+// Client-side proxy for "is this visitor in a gated region?".
+// Authoritative enforcement is still Google's IP-based region default above;
+// this only decides whether to show the banner UI (non-gated = no friction).
+function inGatedRegion() {
+  try {
+    var tz = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
+    // European timezones (EEA/UK/CH) + India (DPDP Act).
+    return tz.indexOf('Europe/') === 0 || tz === 'Asia/Kolkata' || tz === 'Asia/Calcutta';
+  } catch (e) {
+    return true; // unknown timezone → show banner (fail safe toward consent)
+  }
+}
+
+function initConsentBanner() {
+  var stored;
+  try { stored = localStorage.getItem('ritzy_consent'); } catch (e) {}
+  if (stored) return;            // choice already made
+  if (!inGatedRegion()) return;  // default-granted region → no banner needed
+  var banner = document.getElementById('consent-banner');
+  if (banner) banner.style.display = 'flex';
+}
+
+/* ──────────────────────────────────────────────
    NAVIGATION
 ────────────────────────────────────────────── */
 function goTo(n) {
@@ -1550,9 +1718,7 @@ function goTo(n) {
   currentStep = n;
   document.getElementById('step-' + n).classList.add('active');
 
-  window.dataLayer = window.dataLayer || [];
-
-  const events = [
+  var stepEvents = [
     "welcome_page_view",
     "company_verification_started",
     "document_upload_started",
@@ -1560,10 +1726,22 @@ function goTo(n) {
     "payment_started",
     "approval_page_view"
   ];
+  var stepNames = ['Welcome','Company Verification','Document Upload','Agreement','Payment','Approval'];
 
-  if (events[n]) {
-    dataLayer.push({
-      event: events[n]
+  if (stepEvents[n]) {
+    track(stepEvents[n], {
+      funnel_step: n + 1,
+      step_name:   stepNames[n],
+      form_type:   activeFormType
+    });
+  }
+
+  // Entering the payment step → GA4 recommended ecommerce event.
+  if (n === 4) {
+    trackEcommerce('begin_checkout', {
+      currency: ORDER_CURRENCY,
+      value:    ORDER_VALUE,
+      items:    onboardingItems()
     });
   }
 
@@ -1582,6 +1760,11 @@ function mobileNav(n) {
    COMPLETE STEP
 ────────────────────────────────────────────── */
 function completeStep(step) {
+  if (step === 1) {
+    gtag('event', 'company_verification_completed', {
+        step_name: 'Company Verification'
+    });
+}
   // Basic validation per step
   if (step === 1) {
     var ok = true;
@@ -1598,10 +1781,37 @@ function completeStep(step) {
     if (!v('sig-input')) return shake(document.getElementById('sig-input'));
   }
 
+  // ── Analytics: completion events fire only after per-step validation passes ──
+  if (step === 2) {
+    var uploaded = uploadedFiles.filter(function(f){ return f && f.name; }).length;
+    track('documents_submitted', { documents_count: uploaded });
+  }
+  if (step === 3) {
+    track('agreement_accepted', {
+      agreement_name: 'Ritzy Mobility Partner Service Agreement',
+      signed: true
+    });
+  }
+  if (step === 4) {
+    var pmEl = document.querySelector('.pay-method.selected .pay-name');
+    trackEcommerce('purchase', {
+      transaction_id: 'RITZY-' + Date.now(),
+      value:          ORDER_VALUE,
+      currency:       ORDER_CURRENCY,
+      payment_type:   pmEl ? pmEl.textContent.trim() : 'Unknown',
+      items:          onboardingItems()
+    });
+  }
+
   var next = step < 5 ? step + 1 : 6;
   if (next > maxUnlocked) maxUnlocked = next;
 
   if (step === 5) {
+    track('onboarding_complete', {
+      form_type: activeFormType,
+      value:     ORDER_VALUE,
+      currency:  ORDER_CURRENCY
+    });
     goTo(6);
     launchConfetti();
     updateProgress(TOTAL);
@@ -1736,6 +1946,14 @@ function addFile(file, idx) {
   var uz = document.getElementById('uz-' + idx);
   uz.querySelector('.upload-icon').textContent = '✅';
   uz.querySelector('.upload-title').textContent = 'File selected';
+
+  // Analytics: track which document slot was filled (file name is NOT sent — possible PII).
+  var docTypes = ['certificate_of_incorporation', 'gst_registration_certificate', 'authorised_signatory_id'];
+  track('file_upload', {
+    document_type:  docTypes[idx],
+    document_slot:  idx,
+    file_extension: (file.name.split('.').pop() || '').toLowerCase()
+  });
 }
 
 function removeFile(idx) {
@@ -1759,6 +1977,13 @@ function fmtSize(bytes) {
 function selectPay(el) {
   document.querySelectorAll('.pay-method').forEach(function(m){ m.classList.remove('selected'); });
   el.classList.add('selected');
+
+  var name = el.querySelector('.pay-name');
+  track('add_payment_info', {
+    payment_type: name ? name.textContent.trim() : 'Unknown',
+    currency:     ORDER_CURRENCY,
+    value:        ORDER_VALUE
+  });
 }
 
 /* ──────────────────────────────────────────────
@@ -1852,6 +2077,8 @@ function switchForm(type) {
     btnInd.style.background = '#4caf2a'; btnInd.style.color = '#fff';
     btnOrg.style.background = '#fff';    btnOrg.style.color = '#4caf2a';
   }
+
+  track('form_type_selected', { form_type: type });
 }
 
 /* ──────────────────────────────────────────────
@@ -1911,6 +2138,22 @@ completeStep = function(step) {
       };
     }
 
+    // ── Analytics: the core B2B lead event (validation has passed; no PII sent) ──
+    var leadParams = {
+      form_type:   activeFormType,
+      lead_source: 'b2b_onboarding_portal',
+      value:       ORDER_VALUE,
+      currency:    ORDER_CURRENCY
+    };
+    if (activeFormType === 'organisation') {
+      var ind  = v('f-industry');
+      var cabs = parseInt(v('f-cabs'), 10);
+      if (ind)          leadParams.industry   = ind;
+      if (!isNaN(cabs)) leadParams.fleet_size = cabs;
+    }
+    track('generate_lead', leadParams);
+    track('sign_up', { method: activeFormType === 'organisation' ? 'organisation_form' : 'individual_form' });
+
     // Show submitting state
     var btn = document.getElementById('step1-submit-btn');
     btn.textContent = 'Saving…'; btn.disabled = true;
@@ -1956,11 +2199,7 @@ document.addEventListener('DOMContentLoaded', function() {
 ────────────────────────────────────────────── */
 function beginOnboarding() {
 
-  window.dataLayer = window.dataLayer || [];
-
-  dataLayer.push({
-    event: "begin_onboarding"
-  });
+  track('begin_onboarding', { funnel_step: 1 });
 
   if (maxUnlocked < 1) maxUnlocked = 1;
   goTo(1);
@@ -1970,6 +2209,7 @@ function beginOnboarding() {
 ────────────────────────────────────────────── */
 updateUI();
 setTimestamp();
+initConsentBanner();
 </script>
 </body>
 </html>
